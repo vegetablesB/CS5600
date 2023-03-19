@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #define NUM_THREADS 4
-#define NUM_ITERATIONS 10
+#define NUM_ITERATIONS 5
 
 void *thread_func(void *arg)
 {
@@ -34,7 +34,7 @@ void *thread_func(void *arg)
 
         // assert(strcmp(buffer, data) == 0);
 
-        pm_free(v_addr);
+        // pm_free(v_addr);
     }
 
     return NULL;

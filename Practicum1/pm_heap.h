@@ -19,7 +19,7 @@ typedef struct pm_page_table_entry
     size_t size;
     size_t timestamp; // LRU timestamp
     size_t physical_address;
-    int dirty;
+    int present;
     long disk_offset;
 } pm_page_table_entry;
 
