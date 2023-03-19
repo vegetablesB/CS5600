@@ -30,16 +30,15 @@ void *test_thread(void *arg)
         usleep(rand() % 100000); // Sleep between 0 and 100 ms
 
         // Print and verify the integers in the allocated memory
+        // Print and verify the integers in the allocated memory
         printf("Thread %d memory content:", thread_num);
         for (int j = 0; j < num_ints; j++)
         {
-            // assert(data[j] == ((int *)ptr)[j]);
-            printf("%c", ((char *)ptr)[j]);
+            char c = pm_read_char((char *)ptr + j);
+            // assert(data[j] == c);
+            printf("%c", c);
         }
         printf("\n");
-
-        // pm_free(ptr);
-        // printf("Thread %d freed memory\n", thread_num);
 
         free(data);
     }

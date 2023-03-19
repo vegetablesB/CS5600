@@ -20,5 +20,6 @@ typedef struct pm_page_table_entry
 void pm_init(void);
 void *pm_malloc(size_t size);
 void pm_free(void *ptr);
+char pm_read_char(void *ptr);
 
 #endif
