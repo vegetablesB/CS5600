@@ -1,46 +1,40 @@
 #include "pm_heap.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
+#include <string.h>
 #include <unistd.h>
-#include <time.h>
-#include <stdint.h>
-#include <assert.h>
-#define NUM_THREADS 5
 
-void *test_thread(void *arg)
+#define NUM_THREADS 4
+#define NUM_ITERATIONS 10
+
+void *thread_func(void *arg)
 {
     int thread_num = (int)(uintptr_t)arg;
-
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < NUM_ITERATIONS; i++)
     {
         size_t size = (rand() % 100 + 10) * sizeof(char);
-        void *ptr = pm_malloc(size);
-        printf("Thread %d allocated %zu bytes\n", thread_num, size);
+        size_t v_addr = pm_malloc(PM_PAGE_SIZE);
 
-        // Fill the allocated memory with random integers and keep a copy
-        char *data = (char *)malloc(size);
-        int num_ints = size / sizeof(char);
-        for (int j = 0; j < num_ints; j++)
+        // Generate a random string of length 'size'
+        char data[size + 1];
+        for (int j = 0; j < (int)size; j++)
         {
-            data[j] = 'A' + (rand() % 26);
-            ((char *)ptr)[j] = data[j];
+            data[j] = 'A' + rand() % 26;
+        }
+        data[size] = '\0';
+
+        // Write and read the data
+        printf("Thread %d: Writing %s to virtual address %zu\n", thread_num, data, v_addr);
+        pm_write(v_addr, data, size + 1);
+        usleep(10000);
+
+        if (rand() % 1000 > 600)
+        {
+            char *read = (char *)pm_read(v_addr);
+            printf("Thread %d: Read %s\n", thread_num, read);
         }
 
-        usleep(rand() % 100000); // Sleep between 0 and 100 ms
+        // assert(strcmp(buffer, data) == 0);
 
-        // Print and verify the integers in the allocated memory
-        // Print and verify the integers in the allocated memory
-        printf("Thread %d memory content:", thread_num);
-        for (int j = 0; j < num_ints; j++)
-        {
-            char c = pm_read_char((char *)ptr + j);
-            // assert(data[j] == c);
-            printf("%c", c);
-        }
-        printf("\n");
-
-        free(data);
+        pm_free(v_addr);
     }
 
     return NULL;
@@ -52,9 +46,10 @@ int main()
     pm_init();
 
     pthread_t threads[NUM_THREADS];
+
     for (int i = 0; i < NUM_THREADS; i++)
     {
-        pthread_create(&threads[i], NULL, test_thread, (void *)(uintptr_t)i);
+        pthread_create(&threads[i], NULL, thread_func, (void *)(uintptr_t)i);
     }
 
     for (int i = 0; i < NUM_THREADS; i++)

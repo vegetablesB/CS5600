@@ -6,7 +6,7 @@
 #include <stdlib.h>
 
 static char pm_heap[PM_HEAP_SIZE];
-static pm_page_table_entry pm_page_table[PM_NUM_PAGES];
+static pm_page_table_entry pm_page_table[2 * PM_NUM_PAGES];
 pthread_mutex_t pm_mutex;
 static size_t timestamp_counter = 0;
 FILE *disk_file;
@@ -14,12 +14,14 @@ FILE *disk_file;
 void pm_init(void)
 {
     pthread_mutex_init(&pm_mutex, NULL);
-    for (int i = 0; i < PM_NUM_PAGES; i++)
+    for (int i = 0; i < 2 * PM_NUM_PAGES; i++)
     {
         pm_page_table[i].free = 1;
         pm_page_table[i].size = 0;
         pm_page_table[i].timestamp = 0;
+        pm_page_table[i].physical_address = (i % PM_NUM_PAGES) * PM_PAGE_SIZE;
         pm_page_table[i].disk_offset = i * PM_PAGE_SIZE;
+        pm_page_table[i].dirty = 0;
     }
     disk_file = fopen(DISK_FILE, "wb+");
     if (!disk_file)
@@ -35,7 +37,7 @@ size_t find_lru_page(void)
     size_t lru_page = 0;
     for (size_t i = 0; i < PM_NUM_PAGES; i++)
     {
-        if (!pm_page_table[i].free && pm_page_table[i].timestamp < min_timestamp)
+        if (!pm_page_table[i].free && pm_page_table[i].timestamp < min_timestamp && !pm_page_table[i].dirty)
         {
             min_timestamp = pm_page_table[i].timestamp;
             lru_page = i;
@@ -46,147 +48,148 @@ size_t find_lru_page(void)
 
 void swap_out(size_t lru_page)
 {
-    pm_page_table[lru_page].disk_offset = ftell(disk_file);
-    fwrite(pm_heap + lru_page * PM_PAGE_SIZE, 1, PM_PAGE_SIZE, disk_file);
-    // print the contents of the page which is going to be swapped out
-    printf("\nSwapping out page %d, contents: %s\n", (int)lru_page, pm_heap + lru_page * PM_PAGE_SIZE);
+    fseek(disk_file, pm_page_table[lru_page].disk_offset, SEEK_SET);
+    fwrite(pm_heap + pm_page_table[lru_page].physical_address, 1, PM_PAGE_SIZE, disk_file);
+    printf("\nSwapping out page %d, contents: %s\n", (int)lru_page, pm_heap + pm_page_table[lru_page].physical_address);
     pm_page_table[lru_page].free = 1;
     pm_page_table[lru_page].size = 0;
+    pm_page_table[lru_page].dirty = 0;
 }
 
-void swap_in(size_t target_page, size_t new_page)
+void swap_in(size_t disk_page, size_t new_page)
 {
-    fseek(disk_file, pm_page_table[target_page].disk_offset, SEEK_SET);
-    fread(pm_heap + new_page * PM_PAGE_SIZE, 1, PM_PAGE_SIZE, disk_file);
-    printf("Swapping in page %d, contents: %s\n", (int)new_page, pm_heap + new_page * PM_PAGE_SIZE);
+    fseek(disk_file, pm_page_table[disk_page].disk_offset, SEEK_SET);
+    fread(pm_heap + pm_page_table[new_page].physical_address, 1, PM_PAGE_SIZE, disk_file);
+    printf("\nSwapping in page %d, contents: %s\n", (int)disk_page, pm_heap + pm_page_table[new_page].physical_address);
     pm_page_table[new_page].free = 0;
     pm_page_table[new_page].size = PM_PAGE_SIZE;
     pm_page_table[new_page].timestamp = ++timestamp_counter;
-    pm_page_table[new_page].disk_offset = pm_page_table[target_page].disk_offset;
+    pm_page_table[new_page].dirty = 0;
 }
 
-int find_free_page(void)
+size_t pm_malloc(size_t size)
 {
-    size_t free_page = SIZE_MAX;
-    for (size_t i = 0; i < PM_NUM_PAGES; i++)
+    pthread_mutex_lock(&pm_mutex);
+
+    size_t free_page = 2 * PM_NUM_PAGES - 1;
+    size_t free_page_count = 0;
+
+    for (size_t i = 0; i < 2 * PM_NUM_PAGES; i++)
     {
-        if (pm_page_table[i].free)
+        if (!pm_page_table[i].free)
+        {
+            free_page_count++;
+        }
+    }
+    // printf("\nFree page count: %d\n", (int)free_page_count);
+    if (free_page_count >= PM_NUM_PAGES)
+    {
+        size_t lru_page = find_lru_page();
+        // printf("\nLRU page: %d\n", (int)lru_page);
+        swap_out(lru_page);
+    }
+    // Find a new free page table entry for the new page, that is not dirty
+    for (size_t i = 0; i < 2 * PM_NUM_PAGES; i++)
+    {
+        if (pm_page_table[i].free && !pm_page_table[i].dirty)
         {
             free_page = i;
+            printf("\nFree page: %d\n", (int)free_page);
             break;
         }
     }
+    pm_page_table[free_page].free = 0;
+    pm_page_table[free_page].size = size;
+    pm_page_table[free_page].timestamp = ++timestamp_counter;
+    pm_page_table[free_page].disk_offset = free_page * PM_PAGE_SIZE;
 
-    if (free_page == SIZE_MAX)
-    {
-        fprintf(stderr, "No free pages available\n");
-        exit(EXIT_FAILURE);
-    }
+    pthread_mutex_unlock(&pm_mutex);
 
     return free_page;
 }
 
-void *pm_malloc(size_t size)
+void pm_free(size_t virtual_address)
 {
-    size_t num_pages = (size + PM_PAGE_SIZE - 1) / PM_PAGE_SIZE;
+    pthread_mutex_lock(&pm_mutex);
+    if (virtual_address < 2 * PM_NUM_PAGES)
+    {
+        pm_page_table[virtual_address].free = 1;
+        pm_page_table[virtual_address].size = 0;
+        pm_page_table[virtual_address].dirty = 0;
+    }
+
+    pthread_mutex_unlock(&pm_mutex);
+}
+
+void *pm_write(size_t virtual_address, char *data, size_t size)
+{
+    if (virtual_address >= 2 * PM_NUM_PAGES)
+    {
+        return NULL;
+    }
+    pthread_mutex_lock(&pm_mutex);
+
+    if (size <= pm_page_table[virtual_address].size)
+    {
+        memcpy(pm_heap + pm_page_table[virtual_address].physical_address, data, size);
+        // pm_page_table[virtual_address].dirty = 1;
+    }
+    else
+    {
+        fprintf(stderr, "Error: Writing beyond allocated size\n");
+        pthread_mutex_unlock(&pm_mutex);
+        return NULL;
+    }
+
+    pthread_mutex_unlock(&pm_mutex);
+    return (void *)(pm_heap + pm_page_table[virtual_address].physical_address);
+}
+
+void *pm_read(size_t virtual_address)
+{
+    if (virtual_address >= 2 * PM_NUM_PAGES)
+    {
+        return NULL;
+    }
 
     pthread_mutex_lock(&pm_mutex);
 
-    size_t contiguous_pages = 0;
-    size_t start_page = 0;
-    for (size_t i = 0; i < PM_NUM_PAGES; i++)
+    if (!pm_page_table[virtual_address].free)
     {
-        if (pm_page_table[i].free)
+        if (pm_page_table[virtual_address].dirty)
         {
-            if (contiguous_pages == 0)
+            size_t free_page = 2 * PM_NUM_PAGES;
+            size_t free_page_count = 0;
+
+            for (size_t i = 0; i < 2 * PM_NUM_PAGES; i++)
             {
-                start_page = i;
+                if (pm_page_table[i].free && !pm_page_table[i].dirty)
+                {
+                    free_page_count++;
+                    if (free_page_count >= PM_NUM_PAGES)
+                    {
+                        free_page = i;
+                        break;
+                    }
+                }
             }
-            contiguous_pages++;
 
-            if (contiguous_pages == num_pages)
+            if (free_page_count < PM_NUM_PAGES)
             {
-                break;
+                size_t lru_page = find_lru_page();
+                swap_out(lru_page);
+                swap_in(virtual_address, lru_page);
             }
-        }
-        else
-        {
-            contiguous_pages = 0;
-        }
-    }
-
-    if (contiguous_pages != num_pages)
-    {
-        for (size_t i = 0; i < num_pages; ++i)
-        {
-            size_t lru_page = find_lru_page();
-            swap_out(lru_page);
-            pm_page_table[lru_page].free = 1;
-
-            if (i == 0)
+            else
             {
-                start_page = lru_page;
+                swap_in(virtual_address, free_page);
             }
-        }
-        contiguous_pages = num_pages;
-    }
-
-    if (contiguous_pages == num_pages)
-    {
-        for (size_t i = start_page; i < start_page + num_pages; i++)
-        {
-            pm_page_table[i].free = 0;
-            pm_page_table[i].size = PM_PAGE_SIZE;
-            pm_page_table[i].timestamp = ++timestamp_counter;
         }
 
         pthread_mutex_unlock(&pm_mutex);
-
-        return (void *)(pm_heap + start_page * PM_PAGE_SIZE);
+        return (void *)(pm_heap + pm_page_table[virtual_address].physical_address);
     }
 
     pthread_mutex_unlock(&pm_mutex);
     return NULL;
-}
-
-void pm_free(void *ptr)
-{
-    if (ptr == NULL)
-    {
-        return;
-    }
-    pthread_mutex_lock(&pm_mutex);
-
-    size_t page_index = ((uintptr_t)ptr - (uintptr_t)pm_heap) / PM_PAGE_SIZE;
-
-    while (page_index < PM_NUM_PAGES && pm_page_table[page_index].free == 0)
-    {
-        pm_page_table[page_index].free = 1;
-        pm_page_table[page_index].size = 0;
-        page_index++;
-    }
-
-    pthread_mutex_unlock(&pm_mutex);
-}
-char pm_read_char(void *ptr)
-{
-    size_t page_index = ((uintptr_t)ptr - (uintptr_t)pm_heap) / PM_PAGE_SIZE;
-    char *address = (char *)ptr;
-
-    pthread_mutex_lock(&pm_mutex);
-
-    if (pm_page_table[page_index].free)
-    {
-        // The requested page is not in physical memory; swap it in
-        size_t target_page = (size_t)find_free_page(); // Implement this function to find a free page
-        swap_out(target_page);
-        swap_in(page_index, target_page);
-    }
-
-    char data = *address;
-    pm_page_table[page_index].timestamp = ++timestamp_counter;
-
-    pthread_mutex_unlock(&pm_mutex);
-
-    return data;
 }
