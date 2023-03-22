@@ -1,5 +1,4 @@
 #include "pm_heap.h"
-#include <string.h>
 #include <unistd.h>
 
 #define NUM_THREADS 4
@@ -8,10 +7,10 @@
 void *thread_func(void *arg)
 {
     int thread_num = (int)(uintptr_t)arg;
-    for (int i = 0; i < NUM_ITERATIONS; i++)
+    for (int i = 0; i < NUM_ITERATIONS - 1; i++)
     {
-        size_t size = (rand() % 100 + 10) * sizeof(char);
-        size_t v_addr = pm_malloc(PM_PAGE_SIZE);
+        size_t size = (rand() % 10 + 5) * sizeof(char);
+        int v_addr = pm_malloc(PM_PAGE_SIZE);
 
         // Generate a random string of length 'size'
         char data[size + 1];
@@ -22,19 +21,22 @@ void *thread_func(void *arg)
         data[size] = '\0';
 
         // Write and read the data
-        printf("Thread %d: Writing %s to virtual address %zu\n", thread_num, data, v_addr);
+        printf("\nThread %d:", thread_num);
         pm_write(v_addr, data, size + 1);
-        usleep(10000);
+        usleep(50000);
 
         if (rand() % 1000 > 600)
         {
-            char *read = (char *)pm_read(v_addr);
-            printf("Thread %d: Read %s\n", thread_num, read);
+            printf("\n_____Thread %d:", thread_num);
+            pm_read(v_addr);
         }
 
         // assert(strcmp(buffer, data) == 0);
-
-        // pm_free(v_addr);
+        if (rand() % 1000 > 800)
+        {
+            printf("\nThread %d: Freeing virtual address %d\n", thread_num, v_addr);
+            pm_free(v_addr);
+        }
     }
 
     return NULL;
@@ -57,5 +59,6 @@ int main()
         pthread_join(threads[i], NULL);
     }
 
+    find_page_in_disk();
     return 0;
 }
