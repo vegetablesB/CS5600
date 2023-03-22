@@ -14,6 +14,9 @@ pm_heap.o: pm_heap.c pm_heap.h
 test.o: pm_heap_test.c pm_heap.h
 	$(CC) $(CFLAGS) -c -o $@ pm_heap_test.c
 
+run: test
+	./test
+
 .PHONY: clean
 clean:
-	rm -f *.o pm_heap_test
+	rm -f *.o pm_heap_test disk.bin pm_heap test
