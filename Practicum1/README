@@ -2,6 +2,9 @@
 
 This is a C library for managing a heap of persistent memory using a page table. The library uses a virtual memory address space, and pages are swapped in and out of memory to and from a disk file as needed. We are using LRU page replacement policy.
 
+# Group Members
+Ning Cao, Xiangyu Zeng
+
 # Design
 
 The persistent memory heap is implemented using a page table that maps virtual memory pages to physical memory pages and disk pages. The page table is an array of pm_page_table_entry structs, where each entry describes a page of memory, its size, its physical memory address, its disk offset, and other attributes.
