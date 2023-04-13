@@ -94,6 +94,41 @@ void handle_md(int client_sock, char *folder_path_end)
     send(client_sock, client_message, strlen(client_message), 0);
 }
 
+
+void handle_rm(int client_sock, char *folder_path_end)
+{
+    char client_message[BUFFER_SIZE];
+    char folder_path[BUFFER_SIZE - 1024] = "/media/ning/4024-5A83/";
+    strcat(folder_path, folder_path_end);
+
+    int result = rmdir(folder_path);
+    if (result < 0)
+    {
+        if (errno == ENOENT)
+        {
+            perror("Error deleting folder, folder does not exist");
+            strcpy(client_message, "Error: Folder does not exist.");
+        }
+        else if (errno == ENOTEMPTY)
+        {
+            perror("Error deleting folder, folder is not empty");
+            strcpy(client_message, "Error: Folder is not empty.");
+        }
+        else
+        {
+            perror("Error deleting folder");
+            strcpy(client_message, "Error: Unable to delete folder.");
+        }
+    }
+    else
+    {
+        snprintf(client_message, sizeof(client_message), "Folder '%s' deleted successfully.", folder_path);
+    }
+
+    send(client_sock, client_message, strlen(client_message), 0);
+}
+
+
 void handle_put(int client_sock, char *file_path_end)
 {
     char client_message[BUFFER_SIZE];

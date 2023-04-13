@@ -129,6 +129,20 @@ int main(int argc, char *argv[])
         }
         printf("\n");
     }
+    
+      else if (strcmp(argv[1], "RM") == 0)
+    {
+        strcpy(remote_file_path, argv[2]);
+        send_to_server(socket_desc, client_message, sizeof(client_message), remote_file_path, argv[1]);
+        char status[BUFFER_SIZE];
+        ssize_t bytes_received;
+        while ((bytes_received = recv(socket_desc, status, sizeof(status), 0)) > 0)
+        {
+            fwrite(status, 1, bytes_received, stdout);
+        }
+        printf("\n");
+    }
+    
     else if (strcmp(argv[1], "PUT") == 0)
     {
         strcpy(local_file_path, argv[2]);
