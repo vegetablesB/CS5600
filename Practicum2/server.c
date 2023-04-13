@@ -1,6 +1,9 @@
 // server.c -- TCP Socket Server with file reading capability
 
+#include "server.h"
+#include <pthread.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -10,36 +13,121 @@
 #include <pwd.h>
 #include <grp.h>
 #include <time.h>
+#include <signal.h>
+#include <stdint.h>
 
 #define BUFFER_SIZE 1024 * 10
+// Global variable to control the server loop
+volatile int running = 1;
+Server server;
+pthread_mutex_t file_system_mutex;
+
+int init_server(Server *server, const char *config_file_path, int port)
+{
+    // Initialize mutex
+    if (pthread_mutex_init(&file_system_mutex, NULL) != 0)
+    {
+        perror("Error initializing file system mutex");
+        return -1;
+    }
+    // Read USB device paths from the config file
+    FILE *config_file = fopen(config_file_path, "r");
+    if (config_file == NULL)
+    {
+        perror("Error opening config file");
+        return -1;
+    }
+    for (int i = 0; i < 2; i++)
+    {
+        fscanf(config_file, "%[^:]:%s\n", server->usb_drives[i].name, server->usb_drives[i].path);
+    }
+    fclose(config_file);
+
+    // Create socket
+    server->server_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (server->server_sock < 0)
+    {
+        printf("Error while creating socket\n");
+        return -1;
+    }
+    printf("Socket created successfully\n");
+
+    int enable = 1;
+    if (setsockopt(server->server_sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable)) < 0)
+    {
+        perror("setsockopt(SO_REUSEADDR) failed");
+        return -1;
+    }
+    // Set port and IP
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port);
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+
+    // Bind to the set port and IP
+    if (bind(server->server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
+    {
+        printf("Couldn't bind to the port\n");
+        return -1;
+    }
+    printf("Done with binding\n");
+
+    // Listen for clients
+    if (listen(server->server_sock, 1) < 0)
+    {
+        printf("Error while listening\n");
+        return -1;
+    }
+    printf("\nListening for incoming connections...\n");
+
+    return 0;
+}
 
 void handle_get(int client_sock, char *file_path_end)
 {
+    pthread_mutex_lock(&file_system_mutex);
     int file;
     char client_message[BUFFER_SIZE];
     ssize_t bytes_read;
-    char file_path[BUFFER_SIZE - 1024] = "/media/ning/4024-5A83/";
-    strcat(file_path, file_path_end);
-    printf("File path: %s\n", file_path);
-    file = open(file_path, O_RDONLY);
+    char file_path1[BUFFER_SIZE - 1024];
+    strcpy(file_path1, server.usb_drives[0].path);
+    strcat(file_path1, file_path_end);
+    printf("File path1: %s\n", file_path1);
+
+    char file_path2[BUFFER_SIZE - 1024];
+    strcpy(file_path2, server.usb_drives[1].path);
+    strcat(file_path2, file_path_end);
+    printf("File path2: %s\n", file_path2);
+
+    // Try to open the file on the first USB device
+    file = open(file_path1, O_RDONLY);
     if (file < 0)
     {
-        perror("Error opening file");
-        strcpy(client_message, "Error: File not found.");
-        send(client_sock, client_message, strlen(client_message), 0);
-    }
-    else
-    {
-        while ((bytes_read = read(file, client_message, BUFFER_SIZE)) > 0)
+        perror("Error opening file on USB device 1");
+
+        // If the file was not found on the first USB device, try the second one
+        file = open(file_path2, O_RDONLY);
+        if (file < 0)
         {
-            send(client_sock, client_message, bytes_read, 0);
+            perror("Error opening file on USB device 2");
+            strcpy(client_message, "Error: File not found.");
+            send(client_sock, client_message, strlen(client_message), 0);
+            return;
         }
-        close(file);
     }
+
+    // Send the file content to the client
+    while ((bytes_read = read(file, client_message, BUFFER_SIZE)) > 0)
+    {
+        send(client_sock, client_message, bytes_read, 0);
+    }
+    close(file);
+    pthread_mutex_unlock(&file_system_mutex);
 }
 
 void handle_info(int client_sock, char *file_path_end)
 {
+    pthread_mutex_lock(&file_system_mutex);
     struct stat file_stat;
     char file_path[BUFFER_SIZE - 1024] = "/media/ning/4024-5A83/";
     strcat(file_path, file_path_end);
@@ -64,10 +152,12 @@ void handle_info(int client_sock, char *file_path_end)
              pw->pw_name, gr->gr_name, file_stat.st_size, time_str, file_stat.st_mode & 07777);
 
     send(client_sock, file_info, strlen(file_info), 0);
+    pthread_mutex_unlock(&file_system_mutex);
 }
 
 void handle_md(int client_sock, char *folder_path_end)
 {
+    pthread_mutex_lock(&file_system_mutex);
     char client_message[BUFFER_SIZE];
     char folder_path[BUFFER_SIZE - 1024] = "/media/ning/4024-5A83/";
     strcat(folder_path, folder_path_end);
@@ -86,148 +176,141 @@ void handle_md(int client_sock, char *folder_path_end)
             strcpy(client_message, "Error: Unable to create folder.");
         }
     }
-    else
+    else if (result == 0)
     {
         snprintf(client_message, sizeof(client_message), "Folder '%s' created successfully.", folder_path);
     }
 
     send(client_sock, client_message, strlen(client_message), 0);
+    pthread_mutex_unlock(&file_system_mutex);
 }
 
-
-void handle_rm(int client_sock, char *folder_path_end)
+void handle_rm(int client_sock, char *file_path_end)
 {
+    pthread_mutex_lock(&file_system_mutex);
     char client_message[BUFFER_SIZE];
-    char folder_path[BUFFER_SIZE - 1024] = "/media/ning/4024-5A83/";
-    strcat(folder_path, folder_path_end);
-
-    int result = rmdir(folder_path);
-    if (result < 0)
+    char file_path[BUFFER_SIZE - 1024] = "/media/ning/4024-5A83/";
+    strcat(file_path, file_path_end);
+    struct stat path_stat;
+    if (stat(file_path, &path_stat) < 0)
     {
-        if (errno == ENOENT)
+        perror("Error checking file status");
+        strcpy(client_message, "Error: File or folder does not exist.");
+        send(client_sock, client_message, strlen(client_message), 0);
+        return;
+    }
+
+    int result;
+    if (S_ISDIR(path_stat.st_mode))
+    {
+        result = rmdir(file_path);
+        if (result == 0)
         {
-            perror("Error deleting folder, folder does not exist");
-            strcpy(client_message, "Error: Folder does not exist.");
-        }
-        else if (errno == ENOTEMPTY)
-        {
-            perror("Error deleting folder, folder is not empty");
-            strcpy(client_message, "Error: Folder is not empty.");
+            snprintf(client_message, sizeof(client_message), "Folder '%s' deleted successfully.", file_path);
         }
         else
         {
             perror("Error deleting folder");
-            strcpy(client_message, "Error: Unable to delete folder.");
+            snprintf(client_message, sizeof(client_message), "Error: Unable to delete folder '%s'.", file_path);
         }
     }
     else
     {
-        snprintf(client_message, sizeof(client_message), "Folder '%s' deleted successfully.", folder_path);
+        result = remove(file_path);
+        if (result == 0)
+        {
+            snprintf(client_message, sizeof(client_message), "File '%s' deleted successfully.", file_path);
+        }
+        else
+        {
+            perror("Error deleting file");
+            snprintf(client_message, sizeof(client_message), "Error: Unable to delete file '%s'.", file_path);
+        }
     }
 
     send(client_sock, client_message, strlen(client_message), 0);
+    pthread_mutex_unlock(&file_system_mutex);
 }
-
 
 void handle_put(int client_sock, char *file_path_end)
 {
+    pthread_mutex_lock(&file_system_mutex);
     char client_message[BUFFER_SIZE];
-    char file_path[BUFFER_SIZE - 1024] = "/media/ning/4024-5A83/";
-    strcat(file_path, file_path_end);
-    printf("File path: %s\n", file_path);
-    int file_desc = open(file_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (file_desc < 0)
+    ssize_t bytes_received;
+
+    char file_path1[BUFFER_SIZE - 1024];
+    strcpy(file_path1, server.usb_drives[0].path);
+    strcat(file_path1, file_path_end);
+    printf("File path1: %s\n", file_path1);
+
+    char file_path2[BUFFER_SIZE - 1024];
+    strcpy(file_path2, server.usb_drives[1].path);
+    strcat(file_path2, file_path_end);
+    printf("File path2: %s\n", file_path2);
+
+    int file_desc1 = open(file_path1, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int file_desc2 = open(file_path2, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+    if (file_desc1 < 0 && file_desc2 < 0)
     {
-        perror("Error creating file");
-        strcpy(client_message, "Error: Unable to create file.");
+        perror("Error creating files on both USB devices");
+        strcpy(client_message, "Error: Unable to create file on both USB devices.");
         send(client_sock, client_message, strlen(client_message), 0);
         return;
     }
-    printf("File created successfully at server.\n");
-    ssize_t bytes_received;
+
     while ((bytes_received = recv(client_sock, client_message, sizeof(client_message), 0)) > 0)
     {
-        write(file_desc, client_message, bytes_received);
+        if (file_desc1 >= 0)
+        {
+            write(file_desc1, client_message, bytes_received);
+        }
+        if (file_desc2 >= 0)
+        {
+            write(file_desc2, client_message, bytes_received);
+        }
         break;
     }
-    printf("File uploaded successfully.\n");
-    close(file_desc);
-    snprintf(client_message, sizeof(client_message), "File '%s' uploaded successfully.", file_path);
+
+    if (file_desc1 >= 0)
+    {
+        printf("File uploaded successfully to USB device 1.\n");
+        close(file_desc1);
+    }
+    if (file_desc2 >= 0)
+    {
+        printf("File uploaded successfully to USB device 2.\n");
+        close(file_desc2);
+    }
+
+    snprintf(client_message, sizeof(client_message), "File '%s' uploaded successfully.", file_path_end);
     send(client_sock, client_message, strlen(client_message), 0);
+    pthread_mutex_unlock(&file_system_mutex);
 }
 
-int main(void)
+void sigint_handler(int sig)
 {
-    int socket_desc, client_sock;
-    socklen_t client_size;
-    struct sockaddr_in server_addr, client_addr;
-    char client_message[8196];
+    running = 0;
+}
 
+void *handle_client(void *arg)
+{
+    int client_sock = (int)(intptr_t)arg;
+    char client_message[8196];
     // Clean buffers:
     memset(client_message, '\0', sizeof(client_message));
 
-    // Create socket:
-    socket_desc = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (socket_desc < 0)
-    {
-        printf("Error while creating socket\n");
-        return -1;
-    }
-    printf("Socket created successfully\n");
-
-    // Set the SO_REUSEADDR option:
-    int opt = 1;
-    if (setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
-    {
-        perror("Error setting socket options");
-        return -1;
-    }
-
-    // Set port and IP:
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(2000);
-    server_addr.sin_addr.s_addr = inet_addr("10.211.55.6");
-
-    // Bind to the set port and IP:
-    if (bind(socket_desc, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
-    {
-        printf("Couldn't bind to the port\n");
-        return -1;
-    }
-    printf("Done with binding\n");
-
-    // Listen for clients:
-    if (listen(socket_desc, 1) < 0)
-    {
-        printf("Error while listening\n");
-        return -1;
-    }
-    printf("\nListening for incoming connections.....\n");
-
-    // Accept an incoming connection:
-    client_size = sizeof(client_addr);
-    client_sock = accept(socket_desc, (struct sockaddr *)&client_addr, &client_size);
-
-    if (client_sock < 0)
-    {
-        printf("Can't accept\n");
-        return -1;
-    }
-    printf("Client connected at IP: %s and port: %i\n",
-           inet_ntoa(client_addr.sin_addr),
-           ntohs(client_addr.sin_port));
-
     // Receive client's message:
     if (recv(client_sock, client_message,
-             sizeof(client_message), 0) < 0)
+             sizeof(client_message) - 1, 0) < 0)
     {
         printf("Couldn't receive\n");
-        return -1;
+        return NULL;
     }
 
     char command[5];
     char file_path[8192];
+    printf("Client message: %s", client_message);
     sscanf(client_message, "%4s %8191s", command, file_path);
     printf("Command received: %s\n", command);
     if (strcmp(command, "GET") == 0)
@@ -244,17 +327,68 @@ int main(void)
     }
     else if (strcmp(command, "PUT") == 0)
     {
-        printf("PUT command received\n");
         handle_put(client_sock, file_path);
+    }
+    else if (strcmp(command, "RM") == 0)
+    {
+        handle_rm(client_sock, file_path);
     }
     else
     {
         printf("Invalid command received: %s\n", command);
     }
-
     // Closing the socket:
     close(client_sock);
-    close(socket_desc);
+    // Read or write to the shared resource.
+
+    close(client_sock);
+    pthread_exit(NULL);
+}
+
+int main(void)
+{
+
+    // Initialize server: read config file and create socket:
+    if (init_server(&server, "config.txt", 2000) < 0)
+    {
+        printf("Failed to initialize server\n");
+        return -1;
+    }
+
+    // Register signal handler for SIGINT (Ctrl+C)
+    signal(SIGINT, sigint_handler);
+
+    while (running)
+    {
+
+        // Accept an incoming connection
+        socklen_t client_size;
+        struct sockaddr_in client_addr;
+        client_size = sizeof(client_addr);
+        int client_sock = accept(server.server_sock, (struct sockaddr *)&client_addr, &client_size);
+        if (client_sock < 0)
+        {
+            printf("Can't accept\n");
+            return -1;
+        }
+        printf("Client connected at IP: %s and port: %i\n",
+               inet_ntoa(client_addr.sin_addr),
+               ntohs(client_addr.sin_port));
+        // Create a new thread to handle the client connection
+        pthread_t client_thread;
+
+        if (pthread_create(&client_thread, NULL, handle_client, (void *)(intptr_t)client_sock) != 0)
+        {
+            perror("Error creating client thread");
+            close(client_sock);
+            continue;
+        }
+
+        // Detach the thread to let it clean up when it's finished
+        pthread_detach(client_thread);
+    }
+
+    close(server.server_sock);
 
     return 0;
 }

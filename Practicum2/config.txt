@@ -1,0 +1,2 @@
+usb1:/media/ning/4024-5A83/
+usb2:/media/ning/ESD-USB/

@@ -20,6 +20,44 @@ void send_to_server(int socket_desc, char *client_message, size_t buffer_size, c
     }
 }
 
+void get_local_file_path(char *remote_file_path, char *local_file_path)
+{
+    // Set the directory path for the local file
+    strcpy(local_file_path, "/home/ning/Workspace/HW12/");
+
+    // Find the last slash in the remote file path
+    char *last_slash = strrchr(remote_file_path, '/');
+    if (last_slash == NULL)
+    {
+        // No slash found, so just use the filename as-is
+        strcat(local_file_path, remote_file_path);
+    }
+    else
+    {
+        // Append the filename to the directory path
+        strcat(local_file_path, last_slash + 1);
+    }
+}
+
+void get_remote_file_path(char *remote_file_path, char *local_file_path)
+{
+    // Set the directory path for the local file
+    strcpy(remote_file_path, "");
+
+    // Find the last slash in the remote file path
+    char *last_slash = strrchr(local_file_path, '/');
+    if (last_slash == NULL)
+    {
+        // No slash found, so just use the filename as-is
+        strcat(remote_file_path, local_file_path);
+    }
+    else
+    {
+        // Append the filename to the directory path
+        strcat(remote_file_path, last_slash + 1);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int socket_desc;
@@ -35,6 +73,8 @@ int main(int argc, char *argv[])
     }
 
     // Clean buffers:
+    memset(remote_file_path, '\0', sizeof(remote_file_path));
+    memset(local_file_path, '\0', sizeof(local_file_path));
     memset(server_message, '\0', sizeof(server_message));
     memset(client_message, '\0', sizeof(client_message));
 
@@ -73,7 +113,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            strcpy(local_file_path, argv[2]);
+            get_local_file_path(remote_file_path, local_file_path);
         }
         printf("local file path: %s\n", local_file_path);
         printf("remote file path: %s\n", remote_file_path);
@@ -129,8 +169,7 @@ int main(int argc, char *argv[])
         }
         printf("\n");
     }
-    
-      else if (strcmp(argv[1], "RM") == 0)
+    else if (strcmp(argv[1], "RM") == 0)
     {
         strcpy(remote_file_path, argv[2]);
         send_to_server(socket_desc, client_message, sizeof(client_message), remote_file_path, argv[1]);
@@ -142,9 +181,10 @@ int main(int argc, char *argv[])
         }
         printf("\n");
     }
-    
+
     else if (strcmp(argv[1], "PUT") == 0)
     {
+
         strcpy(local_file_path, argv[2]);
         if (argc == 4)
         {
@@ -152,7 +192,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            strcpy(remote_file_path, argv[2]);
+            get_remote_file_path(local_file_path, remote_file_path);
         }
         printf("remote file path: %s\n", remote_file_path);
         // Send the command, local file path, and remote file path to server
