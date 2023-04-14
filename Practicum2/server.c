@@ -22,6 +22,21 @@ volatile int running = 1;
 Server server;
 pthread_mutex_t file_system_mutex;
 
+void permission_string(mode_t mode, char *str)
+{
+    str[0] = (S_ISDIR(mode)) ? 'd' : '-';
+    str[1] = (mode & S_IRUSR) ? 'r' : '-';
+    str[2] = (mode & S_IWUSR) ? 'w' : '-';
+    str[3] = (mode & S_IXUSR) ? 'x' : '-';
+    str[4] = (mode & S_IRGRP) ? 'r' : '-';
+    str[5] = (mode & S_IWGRP) ? 'w' : '-';
+    str[6] = (mode & S_IXGRP) ? 'x' : '-';
+    str[7] = (mode & S_IROTH) ? 'r' : '-';
+    str[8] = (mode & S_IWOTH) ? 'w' : '-';
+    str[9] = (mode & S_IXOTH) ? 'x' : '-';
+    str[10] = '\0';
+}
+
 int init_server(Server *server, const char *config_file_path, int port)
 {
     // Initialize mutex
@@ -112,6 +127,7 @@ void handle_get(int client_sock, char *file_path_end)
             perror("Error opening file on USB device 2");
             strcpy(client_message, "Error: File not found.");
             send(client_sock, client_message, strlen(client_message), 0);
+            pthread_mutex_unlock(&file_system_mutex);
             return;
         }
     }
@@ -138,6 +154,7 @@ void handle_info(int client_sock, char *file_path_end)
         perror("Error retrieving file information");
         strcpy(client_message, "Error: File not found.");
         send(client_sock, client_message, strlen(client_message), 0);
+        pthread_mutex_unlock(&file_system_mutex);
         return;
     }
 
@@ -145,12 +162,11 @@ void handle_info(int client_sock, char *file_path_end)
     struct group *gr = getgrgid(file_stat.st_gid);
     char time_str[100];
     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", localtime(&file_stat.st_mtime));
-
+    char permissions[11];
+    permission_string(file_stat.st_mode, permissions);
     char file_info[BUFFER_SIZE];
-    snprintf(file_info, sizeof(file_info),
-             "Owner: %s\nGroup: %s\nSize: %ld\nLast modified: %s\nPermissions: %04o\n",
-             pw->pw_name, gr->gr_name, file_stat.st_size, time_str, file_stat.st_mode & 07777);
-
+    snprintf(file_info, sizeof(file_info), "%s|%s|%s|%lld|%s", pw->pw_name, gr->gr_name, permissions, (long long)file_stat.st_size, time_str);
+    printf("File info: %s\n", file_info);
     send(client_sock, file_info, strlen(file_info), 0);
     pthread_mutex_unlock(&file_system_mutex);
 }
@@ -197,6 +213,7 @@ void handle_rm(int client_sock, char *file_path_end)
         perror("Error checking file status");
         strcpy(client_message, "Error: File or folder does not exist.");
         send(client_sock, client_message, strlen(client_message), 0);
+        pthread_mutex_unlock(&file_system_mutex);
         return;
     }
 
@@ -256,6 +273,7 @@ void handle_put(int client_sock, char *file_path_end)
         perror("Error creating files on both USB devices");
         strcpy(client_message, "Error: Unable to create file on both USB devices.");
         send(client_sock, client_message, strlen(client_message), 0);
+        pthread_mutex_unlock(&file_system_mutex);
         return;
     }
 
@@ -301,18 +319,22 @@ void *handle_client(void *arg)
     memset(client_message, '\0', sizeof(client_message));
 
     // Receive client's message:
-    if (recv(client_sock, client_message,
-             sizeof(client_message) - 1, 0) < 0)
+    // sometimes the bytes_received is 58 which is larger than the size of the message (13) sent by the client
+    ssize_t bytes_received = recv(client_sock, client_message, sizeof(client_message) - 1, 0);
+    if (bytes_received < 0)
     {
         printf("Couldn't receive\n");
         return NULL;
     }
+    printf("Bytes received: %zd\n", bytes_received);
 
     char command[5];
     char file_path[8192];
-    printf("Client message: %s", client_message);
+    memset(command, '\0', sizeof(command));
+    memset(file_path, '\0', sizeof(file_path));
+    printf("Client message: %s\n", client_message);
     sscanf(client_message, "%4s %8191s", command, file_path);
-    printf("Command received: %s\n", command);
+
     if (strcmp(command, "GET") == 0)
     {
         handle_get(client_sock, file_path);
