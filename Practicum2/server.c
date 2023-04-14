@@ -253,6 +253,7 @@ void handle_put(int client_sock, char *file_path_end)
 {
     pthread_mutex_lock(&file_system_mutex);
     char client_message[BUFFER_SIZE];
+    memset(client_message, '\0', sizeof(client_message));
     ssize_t bytes_received;
 
     char file_path1[BUFFER_SIZE - 1024];
@@ -276,16 +277,18 @@ void handle_put(int client_sock, char *file_path_end)
         pthread_mutex_unlock(&file_system_mutex);
         return;
     }
+    char file_data[BUFFER_SIZE];
+    memset(file_data, '\0', sizeof(file_data));
 
-    while ((bytes_received = recv(client_sock, client_message, sizeof(client_message), 0)) > 0)
+    while ((bytes_received = recv(client_sock, file_data, sizeof(file_data), 0)) > 0)
     {
         if (file_desc1 >= 0)
         {
-            write(file_desc1, client_message, bytes_received);
+            write(file_desc1, file_data, bytes_received);
         }
         if (file_desc2 >= 0)
         {
-            write(file_desc2, client_message, bytes_received);
+            write(file_desc2, file_data, bytes_received);
         }
         break;
     }
@@ -314,13 +317,13 @@ void sigint_handler(int sig)
 void *handle_client(void *arg)
 {
     int client_sock = (int)(intptr_t)arg;
-    char client_message[8196];
+    char client_message[BUFFER_SIZE];
     // Clean buffers:
     memset(client_message, '\0', sizeof(client_message));
 
     // Receive client's message:
     // sometimes the bytes_received is 58 which is larger than the size of the message (13) sent by the client
-    ssize_t bytes_received = recv(client_sock, client_message, sizeof(client_message) - 1, 0);
+    ssize_t bytes_received = recv(client_sock, client_message, sizeof(client_message), 0);
     if (bytes_received < 0)
     {
         printf("Couldn't receive\n");
@@ -329,11 +332,11 @@ void *handle_client(void *arg)
     printf("Bytes received: %zd\n", bytes_received);
 
     char command[5];
-    char file_path[8192];
+    char file_path[100];
     memset(command, '\0', sizeof(command));
     memset(file_path, '\0', sizeof(file_path));
     printf("Client message: %s\n", client_message);
-    sscanf(client_message, "%4s %8191s", command, file_path);
+    sscanf(client_message, "%4s %99s", command, file_path);
 
     if (strcmp(command, "GET") == 0)
     {
