@@ -1,0 +1,45 @@
+Q1:
+Using the code from the above, expand the code to allow you to send a command to the server for reading a file from the server's file storage area. The request should include some kind of command (e.g., GET) and a path to a file name (e.g., folder/foo.txt).
+
+Your client program must allow command line arguments to get the file, e.g.,
+
+`fget GET remote-file-path local-file-path`
+You need to figure out how to get data back to the client -- perhaps by opening another socket, using pipes, or some other mechanism. Assume that the client and server run on different systems. That means that, you cannot use the file system to return the file as the client and server would be running on different computer systems in practice. If you work in a pair, then one of you can develop the client and one the server -- after you agreed on a design.
+
+If the remote file or path is omitted, use the values for the first argument.
+
+The file system managed by your file server must be on a (removable) USB drive.
+
+For now, test your code with some manually create file that you store on the server.
+
+
+Q2:
+Continuing with the code, implement a command that gets all file information about a file, e.g., INFO folder/path/file.txt. It would return relevant information such as ownership, data of last modification, permissions, size, etc. The program then prints all of the file information returned.
+
+How you package the information for the return message is your design choice. Note that USB drives are by default formatted as MS-DOS FAT32 on MacOS, so either reformat the drive using the Disk Utility to MacFS or devise your own way to track permissions, ownership , etc. -- perhaps using an ancillary file or a database.
+
+`fget INFO folder/foo.txt`
+
+Q3:
+Continuing with the code, implement a command that creates a folder, e.g., MD path/newfolder. It should return some kind of status -- what it is is based on your design choices.
+
+`fget MD folder/newfolder`
+
+Q4:
+Continuing with the code, implement a command that creates a new file in the remote file system, e.g., PUT folder/path/file.txt, and stores a stream of bytes in the file. If the remote file path or name is omitted, use the local path or file.
+
+`fget PUT local/afile.c folder/gfile.c`
+
+Q5
+Continuing with the code, implement a command that deletes a file or folder in the remote file system, e.g., RM folder/path/file.txt, and returns some code or indication about its success status.
+
+`fget RM folder/somefile.txt`
+
+Q6
+Rather than writing the information to one USB device, write the information to two at the same time, creating a simple mirrored file system. Test that the data was written to two devices by removing one and ensuring that your server still serves files and still writes files. But the writing can now only occur to one of the two USB drives, so what happens when the second USB come back? You need to address this, but how you do this is your design choice.
+
+Q7
+Continue expanding your code and now create a new thread or process for every client so you can service multiple clients simultaneously.
+
+Q8
+Modify the code from (7) so read requests for files can be distributed across USB devices and you can read from two devices in parallel.

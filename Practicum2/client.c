@@ -1,4 +1,10 @@
-// client.c -- TCP Socket Client with file fetching capability
+/*
+ * @Author: Cao Ning, Zeng XiangYu
+ * @Date: 2023-04-13 16:31:20
+ * @FilePath: client.c
+ * @Assignment: Practicum II
+ * @Course: CS5600 Spring 2023
+ */
 
 #include "client_utils.h"
 #include <stdio.h>

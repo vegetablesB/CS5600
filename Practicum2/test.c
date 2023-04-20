@@ -1,3 +1,11 @@
+/*
+ * @Author: Cao Ning, Zeng XiangYu
+ * @Date: 2023-04-14 16:18:34
+ * @FilePath: test.c
+ * @Assignment: Practicum II
+ * @Course: CS5600 Spring 2023
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
