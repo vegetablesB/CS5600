@@ -1,0 +1,27 @@
+digraph {
+	root [label="/" shape=ellipse]
+	home [label=home shape=ellipse]
+	var [label=var shape=ellipse]
+	usr [label=usr shape=ellipse]
+	pjd [label=pjd shape=ellipse]
+	tmp [label=tmp shape=ellipse]
+	file1 [label=file1 shape=rectangle]
+	file2 [label=file2 shape=rectangle]
+	file3 [label=file3 shape=rectangle]
+	aaa [label=aaa shape=circle]
+	ccc [label=ccc shape=circle]
+	eee [label=eee shape=circle]
+	fff [label=fff shape=circle]
+	root -> home
+	root -> var
+	root -> usr
+	home -> pjd
+	var -> file2
+	var -> tmp
+	usr -> file1
+	pjd -> file3
+	file3 -> fff
+	file2 -> eee
+	eee -> ccc
+	file1 -> aaa
+}

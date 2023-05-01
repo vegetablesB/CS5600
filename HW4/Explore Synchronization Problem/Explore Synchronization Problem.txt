@@ -1,0 +1,50 @@
+In your groups, using a collaboration strategy of your choosing, investigate the Dining Philosophers Problem.
+Find out what problem it is trying to solve and why it is important. Take notes. Think. Study. Collaborate.
+
+The deliverable for this task is an explanation of the problem. Include illustrations as appropriate.
+Be sure to follow proper citation practices as explained above.
+
+Use as many words as you need to properly explain the problem (but that is unlikely to be fewer than 600 words), its solution,
+and its applicability to concurrency control to someone who is a third year undergraduate computer science student.
+
+The Dining Philosophers Problem is a classic computer science problem that was first introduced by Edsger Dijkstra in 1965 and is still considered one of the most important problems in the field of concurrent algorithms. It is a concurrency control problem designed to show the difficulties of synchronizing many threads or processes that share resources.
+
+The problem is often presented as follows: There are five philosophers sitting around a circular table. Each philosopher has a plate of steak in front of them, and between each pair is a fork. The philosophers switch off between food and thinking. A philosopher must pick up the forks to their left and right in order to eat. A philosopher must wait to eat if they are unable to use both forks.
+
+The challenge of the problem is to ensure that the philosophers do not end up in a deadlock situation, where each philosopher is waiting for a fork to be freed, and no philosopher can eat. To see that a proper solution to this problem is not obvious, consider a proposal in which each philosopher is instructed to behave as follows:
+
+think until the left fork is available; when it is, pick it up;
+think until the right fork is available; when it is, pick it up;
+when both forks are held, eat for a fixed amount of time;
+put the left fork down;
+put the right fork down;
+repeat from the beginning.
+
+However, they each will think for an undetermined amount of time and may end up holding a left fork thinking, staring at the right side of the plate, unable to eat because there is no right fork, until they starve. The problem is complicated because the philosophers are all trying to access the same resources, the forks, at the same time. A solution to the problem must also ensure that each philosopher eventually gets a chance to eat, and that no philosopher starves.
+
+There are many solutions for this problem. One is Arbitrator solution. It is to guarantee that a philosopher can only pick up both forks or none by introducing an arbitrator, e.g., a waiter. In order to pick up the forks, a philosopher must ask permission of the waiter. The waiter gives permission to only one philosopher at a time until the philosopher has picked up both of their forks. Putting down a fork is always allowed. The waiter can be implemented as a mutex. In addition to introducing a new central entity (the waiter), this approach can result in reduced parallelism: if a philosopher is eating and one of his neighbors is requesting the forks, all other philosophers must wait until this request has been fulfilled even if forks for them are still available.
+
+Another one is Chandy/Misra solution. In this solution the philosophers need to talk with each other. The algorithm is as following:
+1. For every pair of philosophers contending for a resource, create a fork and give it to the philosopher with the lower ID (n for agent Pn). Each fork can either be dirty or clean. Initially, all forks are dirty.
+2. When a philosopher wants to use a set of resources (i.e. eat), said philosopher must obtain the forks from their contending neighbors. For all such forks the philosopher does not have, they send a request message.
+3. When a philosopher with a fork receives a request message, they keep the fork if it is clean, but give it up when it is dirty. If the philosopher sends the fork over, they clean the fork before doing so.
+4. After a philosopher is done eating, all their forks become dirty. If another philosopher had previously requested one of the forks, the philosopher that has just finished eating cleans the fork and sends it.
+The solution also solves the starvation problem.
+
+The solution of Dijkstra is to use one mutex and one semaphore per philosopher and one state variable per philosopher. The mutex is used to control access to the state variables and ensure that only one philosopher can change its state at a time. The semaphore is used to control the availability of forks.
+
+Each philosopher is either thinking, hungry, or eating at the moment. Philosophers do not need forks when they are thinking. A philosopher needs two forks to eat when they are hungry. A philosopher uses two forks while dining and keeps its other forks to it's own.
+
+The algorithm works as follows:
+
+1. philosopher_state = thinking at first.
+2. The philosopher then checks if its left and right forks are available. If they are, it sets its state to eating and releases the mutex.
+3. If the forks are not available, the philosopher sets its state to hungry and releases the mutex. The philosopher then waits on the semaphore for the forks to become available.
+4. When a philosopher finishes eating, it acquires the mutex, sets its state to thinking, and releases the forks.
+5. repeat step 2 for each philosopher.
+This solution ensures that the philosophers will not deadlock, as a philosopher will only wait for forks if both of them are unavailable.
+
+Reference:
+[1] https://en.wikipedia.org/wiki/Dining_philosophers_problem
+[2] https://mariusbancila.ro/blog/2017/01/20/dining-philosophers-in-c11-chandy-misra-algorithm/
+[3] https://www.geeksforgeeks.org/dining-philosopher-problem-using-semaphores/

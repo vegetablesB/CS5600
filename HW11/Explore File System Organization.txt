@@ -1,0 +1,84 @@
+Question 1
+The on-disk layout of an MSDOS-like file system with a file allocation table and simple fixed-length directory entries holding all file attributes is shown below.
+
+Block #
+
+0       Superblock
+                    FAT len: 1 block
+                    root start: 2
+
+1       FAT                 [0]     [1]     [2]     [3]     [4]     [5]     [6]     [7]     [8]     [9]     [10]    [11]    [12]
+                    EOF      -       -       1       1       1       1       1       -       1       1       0       1       1
+                    next     -       -       -       -       -       -       -       -       -       -       5       -       -
+                    inUse    1       1       1       1       1       1       1       0       1       1       1       1       1
+
+2       directory   valid   isdir   name    start   len
+                    1       1       "home"  8       -
+                    1       1       "var"   4       -
+                    1       1       "usr"   6       -
+
+3       data        "aaa.." (1024 bytes)
+
+4       directory   valid   isdir   name    start   len
+                    1       0       "file2" 10      2000
+                    1       1       "tmp"   11      -
+
+5       data        "ccc.." (1024 bytes)
+
+6       directory   valid   isdir   name    start   len
+                    1       0       "file1" 3       1000
+
+7       data        "ddd.." (1024 bytes)
+
+8       directory   valid   isdir   name    start   len
+                    1       1       "pjd"   9       -
+
+9       directory   valid   isdir   name    start   len
+                    1       0       "file3" 12      800
+
+10      data        "eee.."(1024 bytes)
+
+11      directory   (empty)
+
+12      data        "fff.." (1024 bytes)
+
+Draw (by hand or using a drawing program) the file system tree corresponding to the file system image shown above, with circles or ovals for directories, rectangles for files, and lines connecting a directory to the files or directories it contains.
+
+Answer:
+
+The root directory contains three directories: home, var, and usr. The home directory contains a subdirectory called pjd, which in turn contains a file called file3. The var directory contains a file called file2 and a subdirectory called tmp. The usr directory contains a file called file1.
+
+Question 2
+There are five data blocks shown in the diagram, blocks 3, 5, 7, 10 and 12 (all other blocks shown are directories, or the FAT and superblock). Bytes in a file can be numbered from 0 to N-1 where N is the length of the file in bytes – thus byte 0 is the first byte of the file, and byte N-1 is the last.
+
+For each of these data blocks, state the following:
+
+name of the file to which it corresponds
+exact portion of the file (e.g., “bytes 0-1023”) held in that block
+
+Answer:
+
+Block 3:
+
+- Name of the file: file1
+- Exact portion of the file: bytes 0-999 (the length of file1 is 1000 bytes)
+
+Block 5:
+
+- Name of the file: file2
+- Exact portion of the file: bytes 1024-1999 (the length of file2 is 2000 bytes, the first 1024 bytes of which are in block 10)
+
+Block 7:
+
+- Name of the file: null
+- Exact portion of the file: null (this block is unused)
+
+Block 10:
+
+- Name of the file: file2
+- Exact portion of the file: bytes 0-1023
+
+Block 12:
+
+- Name of the file: file3
+- Exact portion of the file: bytes 0-799 (the length of file3 is 800 bytes)

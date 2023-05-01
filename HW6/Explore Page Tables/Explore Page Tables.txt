@@ -1,0 +1,20 @@
+A process has the following virtual memory regions:
+
+00408000 to 0040AFFF – read/only
+01002000 to 01004FFF – read/write
+
+You are given 9 blocks in the figure below to create this address space: 3 blocks for page tables (00000, 00001, and 00002), and 6 blocks for the mapped memory. The root of the page table (i.e., the page directory) is page 00000. Virtual and physical addresses are 32 bits, and the page size is 4096 bytes, giving a 20-bit page number and 12-bit offset.
+
+Draw the page table corresponding to this configuration. For each page directory or page table entry which has P=1 (i.e. it is valid) please give (a) its index 'i,' which should be a 3-digit hex number; (b) the writeable bit (w), which is 1 if the mapped page can be written (ignored in the page directory), and (c) the physical block number (between 00001 and 00008) pointed to. In addition, draw an arrow from each page directory or table entry to the page it points to. Please provide all numbers in hex.
+
+Here is a possible representation of the page table for this virtual memory configuration:
+
+For 00408000 to 0040AFFF
+The page number is 00408 which is 0000 0000 0100 0000 1000 in binary. Divide it in the middle, 0x001 0x008 is the result. 0x001 is for the first level, 0x008 is for the second level. For 00409, 0x001 is the same, 0x009 is for the second level. For 0040A, 0x001 is the same, 0x00A is for the second level.
+
+For 01002000 to 01004FFF
+The page number is 01002 which is 0000 0001 0000 0000 0010 in binary. Divide it in the middle, 0x004 0x002 is the result. 0x004 is for the first level, 0x002 is for the second level. For 01003, 0x004 is the same, 0x003 is for the second level. For 01004, 0x004 is the same, 0x004 is for the second level.
+
+The physical address is set contiguous. For 00408000 to 0040AFFF, the physical address is 00003 to 00005. For 01002000 to 01004FFF, the physical address is 00006 to 00008.
+
+So, the page directory entry at index 000 points to Page Table 1 at index 001, which has two entries: the first entry at index 001 points to Page Table 2 at index 002, and the second entry at index 002 points to Physical Block 4 at index 004. Page Table 2 has two entries: the first entry at index 003 points to Physical Block 5 at index 005, and the second entry at index 004 points to Physical Block 6 at index 006. The physical blocks are either read-only or read-write, as specified in the virtual memory configuration.

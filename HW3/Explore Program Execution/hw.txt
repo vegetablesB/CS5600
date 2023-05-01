@@ -1,0 +1,88 @@
+The following diagram shows stacks, variables, and code for two threads that switch via the yield12() function. The code is written in CSx600 assembly language. sp1 and sp2 are the saved respective stack pointers for the two threads.
+0x800 sp1
+0x804 sp2
+0x804 -> 0x200
+
+0x208 -> 12
+0x204 -> 7
+0x200 -> 0x500
+
+
+yield12():
+0x300 PUSH 0x800    //sp1
+0x304 PUSH *(0x804) //sp2
+0x308 CALL 0x400    //do_switch(sp2, &sp1)
+0x30C ADD 8->SP
+
+0x500 POP EAX       //EAX = stack.pop()
+0x504 POP EBX       //EBX = stack.pop()
+---DONE---
+
+do_switch(newsp, oldsp_ptr):
+0x400 MOV *(SP+8)->EAX  //EAX = oldsp_ptr
+0x404 MOV SP->*EAX      //*oldsp_ptr = SP
+0x408 MOV *(SP+4)->EAX  //EAX = newsp
+0x40C MOV EAX->SP       //SP = newsp
+0x410 RET
+
+Assumptions & Clarifications
+All instructions and data are assumed to be 4 bytes
+PUSH X is equivalent to *(--SP) = X (pre-decrement)
+POP X is equivalent to X = *(SP++) (post-increment)
+CALL X is a single instruction equivalent to PUSH PC+4, JMP X
+RET is equivalent to POP PC
+stack pointer = 0x118
+program pointer = 0x300
+Starting with the stack pointer and program counter given above, the CPU will execute instructions until it reaches “---DONE---” with PC=0x508.
+
+Deliverable
+For each of the instructions, give the following information:
+
+Instruction address, i.e., the value of the program counter [PC]
+The instruction at that address, i.e., “MOV SP → *EAX”)
+Identify any registers or memory locations (give the specific addresses) that are modified by that instruction, and provide their new contents.
+For any control flow instructions (JMP, CALL, RET) give the destination address, i.e., “0x704, RET: jump to 0x940, SP changes from 0x11FC to 0x1200”
+
+
+
+Instruction address: 0x300
+Instruction: PUSH 0x800
+Registers/memory locations modified: SP changes from 0x118 to 0x114, *(SP)=*(0x114)=0x800
+
+Instruction address: 0x304
+Instruction: PUSH *(0x804)
+Registers/memory locations modified: SP changes from 0x114 to 0x110, *(SP)=*(0x110)=0x200
+
+Instruction address: 0x308
+Instruction: CALL 0x400 (PUSH PC+4 JMP 0x400)
+Control flow destination: 0x400, CALL: jump to 0x400, PC changes from 0x308 to 0x400, SP = changes from 0x110 to 0x10C, *(SP) = *(0x10C) = 0x30C
+
+Instruction address: 0x400
+Instruction: MOV *(SP+8)->EAX
+Registers/memory locations modified: EAX = *(SP+8) = *(0x10C+8) = *(0x114) = 0x800, SP = 0x10C
+
+Instruction address: 0x404
+Instruction: MOV SP->*EAX
+Registers/memory locations modified: *EAX = *(0x800) = 0x10C
+
+Instruction address: 0x408
+Instruction: MOV *(SP+4)->EAX
+Registers/memory locations modified: EAX = *(0x110) = 0x200
+
+Instruction address: 0x40C
+Instruction: MOV EAX->SP
+Registers/memory locations modified: SP changes from 0x10C to 0x200
+
+Instruction address: 0x410
+Instruction: RET (POP PC)
+Control flow destination: 0x30C, PC = (*SP) = (*0x200) = 0x500 SP = changes from 0x200 to 0x204
+
+Instruction address: 0x500
+Instruction: POP EAX
+Registers/memory locations modified: EAX = *(0x204) = 7, SP changes from 0x204 to 0x208
+
+Instruction address: 0x504
+Instruction: POP EBX
+Registers/memory locations modified: EBX = *(0x208) = 12, SP changes from 0x208 to 0x20C
+
+---DONE---

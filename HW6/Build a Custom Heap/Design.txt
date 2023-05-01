@@ -1,0 +1,27 @@
+Design of the pm-heap:
+
+The pm-heap will be implemented as a free-list based heap. The free-list will store a linked list of free blocks of memory that are available for allocation. Each block of memory will have a header, storing information about the size of the block and a flag indicating whether the block is free or not.
+
+When a pm-malloc request is made, the pm-heap will traverse the free-list and find the first block that is large enough to fulfill the request. If a block is found, it will be split into two parts - one part will be returned to the caller as the allocated memory, and the other part will be returned back to the free-list. If no block is found, the pm-heap will return a null pointer indicating that there is not enough memory available to fulfill the request.
+
+When a pm-free request is made, the pm-heap will merge the freed block with any adjacent free blocks and add the resulting larger block to the free-list.
+
+Implementation of the pm-heap:
+
+The pm-heap will be implemented as a set of functions defined in a header file (pm_heap.h) and implemented in a source file (pm_heap.c). The header file will contain the function prototypes for pm-malloc and pm-free, as well as a structure definition for the memory block header. The source file will contain the implementation of the pm-heap functions.
+
+The following steps will be followed to implement the pm-heap:
+
+Allocate the os-mem by creating a large array of bytes (char pm_heap[10 * 1024 * 1024]).
+Initialize the free-list by creating a single large block of memory and adding it to the free-list.
+Implement pm-malloc by traversing the free-list and finding the first block that is large enough to fulfill the request.
+Implement pm-free by merging the freed block with any adjacent free blocks and adding the resulting larger block to the free-list.
+Test the pm-heap allocation and investigate any memory fragmentation issues.
+Testing the pm-heap:
+
+The pm-heap will be tested using a separate test file (pm_heap_test.c) that will allocate and free memory using the pm-malloc and pm-free functions. The following test cases will be considered:
+
+Allocating and freeing a single block of memory
+Allocating multiple blocks of memory and freeing them in a different order
+Allocating a large block of memory and freeing it
+Allocating and freeing blocks of memory of different sizes

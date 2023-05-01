@@ -1,0 +1,107 @@
+Consider the following code, written in a Python-like language (blocks are defined by indentation), but with pthreads-like mutexes and condition variables:
+
+     monitor rendezvous_5600:
+1      mutex m
+2      condition C
+3      int count = 0
+
+     meetup():
+4      m.lock()
+5      # return from call to m.lock()
+6      count = count + 1
+7      if count < 2:
+7.1        wait(C, m)
+       else:
+7.2        signal(C)
+8      count = 0
+9      m.unlock()
+In the initial state, count is 0. Starting at time 0.0, the following sequence of events occurs:
+
+At time 0.0, thread A invokes meetup()
+At time 1.0, threads B and C invoke meetup(). Thread B “wins the race” and enters the monitor before thread C.
+There are four legal orders of execution.
+
+Deliverable: Give all orders of execution in detail. In particular, indicate, in order, each line executed in the following manner:
+
+<time>, <thread>, <line#>
+
+When lines 6 and 8 execute, indicate the resulting value of count. As a starting point, the first couple lines of each execution order after the initial start are:
+
+0.0 A 4
+0.0 A 6 [count → 1]
+0.0 A 7
+
+
+Answer:
+order 1:
+0.0 A 4
+0.0 A 6 [count → 1]
+0.0 A 7
+0.0 A 7.1
+1.0 B 4
+1.0 B 6 [count → 2]
+1.0 B 7
+1.0 B 7.2
+1.0 A 8 [count → 0]
+1.0 A 9
+1.0 B 8 [count → 0]
+1.0 B 9
+1.0 C 4
+1.0 C 6 [count → 1]
+1.0 C 7
+1.0 C 7.1
+
+order 2:
+0.0 A 4
+0.0 A 6 [count → 1]
+0.0 A 7
+0.0 A 7.1
+1.0 B 4
+1.0 B 6 [count → 2]
+1.0 B 7
+1.0 B 7.2
+1.0 A 8 [count → 0]
+1.0 A 9
+1.0 C 4
+1.0 C 6 [count → 1]
+1.0 C 7
+1.0 C 7.1
+1.0 B 8 [count → 0]
+1.0 B 9
+
+
+order 3:
+0.0 A 4
+0.0 A 6 [count → 1]
+0.0 A 7
+0.0 A 7.1
+1.0 B 4
+1.0 B 6 [count → 2]
+1.0 B 7
+1.0 B 7.2
+1.0 B 8 [count → 0]
+1.0 B 9
+1.0 A 8 [count → 0]
+1.0 A 9
+1.0 C 4
+1.0 C 6 [count → 1]
+1.0 C 7
+1.0 C 7.1
+
+order 4:
+0.0 A 4
+0.0 A 6 [count → 1]
+0.0 A 7
+0.0 A 7.1
+1.0 B 4
+1.0 B 6 [count → 2]
+1.0 B 7
+1.0 B 7.2
+1.0 B 8 [count → 0]
+1.0 B 9
+1.0 C 4
+1.0 C 6 [count → 1]
+1.0 C 7
+1.0 C 7.1
+1.0 A 8 [count → 0]
+1.0 A 9
